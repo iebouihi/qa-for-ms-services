@@ -33,6 +33,14 @@ for path in sorted(glob.glob("**/TEST-*.xml", recursive=True) + glob.glob("**/re
                 emit(f"{case.get('classname')}.{case.get('name')}", detail.strip()[:3000])
 
 for log in sys.argv[1:]:
+    if log.startswith("tail:"):  # emit the end of a log as-is (e.g. docker compose output)
+        try:
+            tail = open(log[5:], encoding="utf-8", errors="replace").read().splitlines()[-50:]
+            if tail:
+                emit(f"Last lines of {log[5:]}", "\n".join(l[:300] for l in tail))
+        except OSError:
+            pass
+        continue
     try:
         lines = open(log, encoding="utf-8", errors="replace").read().splitlines()
     except OSError:
