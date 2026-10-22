@@ -1,6 +1,7 @@
 package com.shop.cart.customers;
 
 import org.apache.kafka.clients.admin.NewTopic;
+import org.apache.kafka.common.TopicPartition;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -17,8 +18,11 @@ class KafkaConsumerConfig {
     /** 2 quick retries, then the record goes to {@code <topic>.DLT} with the failure in its headers. */
     @Bean
     CommonErrorHandler kafkaErrorHandler(KafkaTemplate<String, String> kafka) {
-        DefaultErrorHandler handler = new DefaultErrorHandler(
-                new DeadLetterPublishingRecoverer(kafka), new FixedBackOff(500L, 2L));
+        // Destination named explicitly: library defaults have changed across versions (".DLT" vs "-dlt"),
+        // and the dead-letter topic is part of the platform contract (contracts/asyncapi).
+        DeadLetterPublishingRecoverer recoverer = new DeadLetterPublishingRecoverer(kafka,
+                (record, exception) -> new TopicPartition(record.topic() + ".DLT", record.partition()));
+        DefaultErrorHandler handler = new DefaultErrorHandler(recoverer, new FixedBackOff(500L, 2L));
         handler.addNotRetryableExceptions(IllegalArgumentException.class);
         return handler;
     }
