@@ -1,0 +1,15 @@
+# Build output
+target/
+*.class
+
+# Generated contracts (published as CI artifact / to a Pact Broker)
+contracts/pacts/
+
+# IDE / OS
+.idea/
+*.iml
+.vscode/
+.DS_Store
+
+# Logs
+compose-logs.txt

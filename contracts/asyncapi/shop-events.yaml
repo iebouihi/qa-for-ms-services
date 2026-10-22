@@ -1,0 +1,64 @@
+asyncapi: 3.0.0
+info:
+  title: Headless Shop events
+  version: 1.0.0
+  description: >
+    Kafka events between services. JSON payloads, keyed by aggregate id (ordering per
+    customer / per cart). Delivery is at least once: consumers must be idempotent.
+    Every message carries an X-Correlation-Id header.
+channels:
+  customerRegistered:
+    address: customer.registered
+    messages:
+      CustomerRegistered: { $ref: '#/components/messages/CustomerRegistered' }
+  customerRegisteredDeadLetter:
+    address: customer.registered.DLT
+    description: Messages cart-service could not process, parked for investigation.
+    messages:
+      CustomerRegistered: { $ref: '#/components/messages/CustomerRegistered' }
+  cartCreated:
+    address: cart.created
+    messages:
+      CartCreated: { $ref: '#/components/messages/CartCreated' }
+operations:
+  publishCustomerRegistered: { action: send, channel: { $ref: '#/channels/customerRegistered' }, summary: customer-service }
+  consumeCustomerRegistered: { action: receive, channel: { $ref: '#/channels/customerRegistered' }, summary: cart-service }
+  publishCartCreated: { action: send, channel: { $ref: '#/channels/cartCreated' }, summary: cart-service }
+components:
+  messages:
+    CustomerRegistered:
+      headers:
+        type: object
+        properties:
+          X-Correlation-Id: { type: string }
+      payload:
+        type: object
+        required: [eventId, eventType, occurredAt, customerId, email]
+        properties:
+          eventId: { type: string, format: uuid }
+          eventType: { type: string, const: CustomerRegistered }
+          occurredAt: { type: string, format: date-time }
+          customerId: { type: string, format: uuid }
+          email: { type: string, format: email }
+          firstName: { type: string }
+          lastName: { type: string }
+    CartCreated:
+      payload:
+        type: object
+        required: [eventId, eventType, occurredAt, cartId, customerId, currency, total, items]
+        properties:
+          eventId: { type: string, format: uuid }
+          eventType: { type: string, const: CartCreated }
+          occurredAt: { type: string, format: date-time }
+          cartId: { type: string, format: uuid }
+          customerId: { type: string, format: uuid }
+          currency: { type: string }
+          total: { type: number }
+          items:
+            type: array
+            items:
+              type: object
+              properties:
+                productId: { type: string, format: uuid }
+                quantity: { type: integer }
+                unitPrice: { type: number }

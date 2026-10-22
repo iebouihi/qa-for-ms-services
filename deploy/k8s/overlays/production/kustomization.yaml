@@ -1,0 +1,19 @@
+# Production: managed PostgreSQL (350 GB) and Kafka. No seed profile: no test data, ever.
+# Rollout is progressive (canary + synthetic journeys), see docs/test-strategy.md.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: shop-production
+resources:
+  - ../../base
+configMapGenerator:
+  - name: shop-config
+    behavior: merge
+    literals:
+      - DB_HOST=shop-prod.postgres.example.internal
+      - KAFKA_BOOTSTRAP_SERVERS=shop-prod.kafka.example.internal:9092
+      - SHOP_TOPICS_REPLICAS=3
+replicas:
+  - { name: customer-service, count: 3 }
+  - { name: product-service, count: 3 }
+  - { name: cart-service, count: 3 }
+  - { name: frontend, count: 2 }

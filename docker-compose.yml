@@ -1,0 +1,110 @@
+# Full stack on one machine: the "ephemeral environment" used by CI for every PR,
+# and by developers locally. Same images as Kubernetes, same engines as production.
+#
+#   mvn -B -DskipTests package
+#   docker compose up -d --build --wait
+#   open http://localhost:8080
+name: shop
+
+x-service-env: &service-env
+  DB_USER: shop
+  DB_PASSWORD: shop
+  KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+
+x-service-health: &service-health
+  interval: 5s
+  timeout: 3s
+  retries: 30
+  start_period: 20s
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: shop
+      POSTGRES_PASSWORD: shop
+    volumes:
+      - ./deploy/compose/postgres-init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    ports: ["5432:5432"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U shop"]
+      interval: 3s
+      retries: 20
+
+  kafka:
+    image: apache/kafka:3.9.1
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093,HOST://:29092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,HOST://localhost:29092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,HOST:PLAINTEXT
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+    ports: ["29092:29092"]
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:9092 > /dev/null 2>&1"]
+      interval: 5s
+      retries: 30
+
+  customer-service:
+    build: { context: ., dockerfile: services/Dockerfile, args: { JAR_FILE: services/customer-service/target/customer-service-1.0.0-SNAPSHOT.jar } }
+    environment:
+      <<: *service-env
+      DB_URL: jdbc:postgresql://postgres:5432/customers
+    ports: ["8081:8081"]
+    depends_on:
+      postgres: { condition: service_healthy }
+      kafka: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8081/actuator/health/readiness | grep -q UP"]
+      <<: *service-health
+
+  product-service:
+    build: { context: ., dockerfile: services/Dockerfile, args: { JAR_FILE: services/product-service/target/product-service-1.0.0-SNAPSHOT.jar } }
+    environment:
+      <<: *service-env
+      DB_URL: jdbc:postgresql://postgres:5432/products
+      SPRING_PROFILES_ACTIVE: seed   # reference catalog = test data as code (never in production)
+    ports: ["8082:8082"]
+    depends_on:
+      postgres: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8082/actuator/health/readiness | grep -q UP"]
+      <<: *service-health
+
+  cart-service:
+    build: { context: ., dockerfile: services/Dockerfile, args: { JAR_FILE: services/cart-service/target/cart-service-1.0.0-SNAPSHOT.jar } }
+    environment:
+      <<: *service-env
+      DB_URL: jdbc:postgresql://postgres:5432/carts
+      PRODUCT_SERVICE_URL: http://product-service:8082
+    ports: ["8083:8083"]
+    depends_on:
+      postgres: { condition: service_healthy }
+      kafka: { condition: service_healthy }
+      product-service: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8083/actuator/health/readiness | grep -q UP"]
+      <<: *service-health
+
+  frontend:
+    build: ./frontend
+    environment:
+      CUSTOMER_SERVICE_URL: http://customer-service:8081
+      PRODUCT_SERVICE_URL: http://product-service:8082
+      CART_SERVICE_URL: http://cart-service:8083
+    ports: ["8080:8080"]
+    depends_on:
+      customer-service: { condition: service_healthy }
+      product-service: { condition: service_healthy }
+      cart-service: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/healthz | grep -q ok"]
+      interval: 3s
+      retries: 20

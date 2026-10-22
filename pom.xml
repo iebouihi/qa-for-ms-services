@@ -1,0 +1,114 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-parent</artifactId>
+        <version>3.5.7</version>
+        <relativePath/>
+    </parent>
+
+    <groupId>com.shop</groupId>
+    <artifactId>qa-for-ms-services</artifactId>
+    <version>1.0.0-SNAPSHOT</version>
+    <packaging>pom</packaging>
+    <name>Headless shop - QA reference architecture</name>
+
+    <!--
+      Reactor order matters: cart-service is the CONSUMER of the Product API and of the
+      CustomerRegistered event, so its Pact tests must run before the providers verify them.
+    -->
+    <modules>
+        <module>libs/service-observability</module>
+        <module>libs/test-support</module>
+        <module>services/cart-service</module>
+        <module>services/customer-service</module>
+        <module>services/product-service</module>
+    </modules>
+
+    <properties>
+        <java.version>21</java.version>
+        <pact.version>4.6.17</pact.version>
+        <wiremock.version>3.13.1</wiremock.version>
+        <rest-assured.version>5.5.6</rest-assured.version>
+        <!-- Where consumer tests write pacts and providers read them (stands in for a Pact Broker). -->
+        <pacts.dir>${maven.multiModuleProjectDirectory}/contracts/pacts</pacts.dir>
+    </properties>
+
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>com.shop</groupId>
+                <artifactId>service-observability</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.shop</groupId>
+                <artifactId>test-support</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>au.com.dius.pact.consumer</groupId>
+                <artifactId>junit5</artifactId>
+                <version>${pact.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>au.com.dius.pact.provider</groupId>
+                <artifactId>junit5spring</artifactId>
+                <version>${pact.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.wiremock</groupId>
+                <artifactId>wiremock-standalone</artifactId>
+                <version>${wiremock.version}</version>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+
+    <build>
+        <pluginManagement>
+            <plugins>
+                <!-- Fast layer: unit + contract tests (no Docker). -->
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-surefire-plugin</artifactId>
+                    <configuration>
+                        <includes>
+                            <include>**/*Test.java</include>
+                        </includes>
+                        <systemPropertyVariables>
+                            <pact.rootDir>${pacts.dir}</pact.rootDir>
+                            <pacts.dir>${pacts.dir}</pacts.dir>
+                        </systemPropertyVariables>
+                    </configuration>
+                </plugin>
+                <!-- Component layer: *IT classes, real Postgres + Kafka through Testcontainers. -->
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-failsafe-plugin</artifactId>
+                    <executions>
+                        <execution>
+                            <goals>
+                                <goal>integration-test</goal>
+                                <goal>verify</goal>
+                            </goals>
+                        </execution>
+                    </executions>
+                </plugin>
+            </plugins>
+        </pluginManagement>
+    </build>
+
+    <profiles>
+        <!-- API journey tests run against a deployed environment, never in the default build. -->
+        <profile>
+            <id>journeys</id>
+            <modules>
+                <module>tests/api-tests</module>
+            </modules>
+        </profile>
+    </profiles>
+</project>

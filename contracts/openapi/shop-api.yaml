@@ -1,0 +1,149 @@
+openapi: 3.0.3
+info:
+  title: Headless Shop public API
+  version: 1.0.0
+  description: >
+    Published API of the three services, exposed through the gateway under /api.
+    Used for documentation, frontend mocks and service virtualization (WireMock, Microcks, Prism).
+    The consumer-specific, executable contracts are the Pact files (see contracts/README.md).
+paths:
+  /api/customers:
+    post:
+      summary: Register a customer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RegisterCustomer' }
+      responses:
+        '201': { description: Created, content: { application/json: { schema: { $ref: '#/components/schemas/Customer' } } } }
+        '400': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
+  /api/customers/{id}:
+    get:
+      summary: Get a customer
+      parameters: [{ $ref: '#/components/parameters/Id' }]
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Customer' } } } }
+        '404': { $ref: '#/components/responses/Problem' }
+  /api/products:
+    get:
+      summary: Browse active products
+      parameters:
+        - { name: q, in: query, schema: { type: string }, description: Case-insensitive name search }
+        - { name: page, in: query, schema: { type: integer, minimum: 0, default: 0 } }
+        - { name: size, in: query, schema: { type: integer, minimum: 1, maximum: 50, default: 20 } }
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/ProductPage' } } } }
+  /api/products/{id}:
+    get:
+      summary: Get a product (including inactive ones)
+      parameters: [{ $ref: '#/components/parameters/Id' }]
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Product' } } } }
+        '404': { $ref: '#/components/responses/Problem' }
+  /api/carts:
+    post:
+      summary: Create a cart for a registered customer
+      description: >
+        Returns 422 CUSTOMER_UNKNOWN while cart-service has not yet consumed the customer's
+        CustomerRegistered event (eventual consistency); clients may retry this code.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateCart' }
+      responses:
+        '201': { description: Created, content: { application/json: { schema: { $ref: '#/components/schemas/Cart' } } } }
+        '400': { $ref: '#/components/responses/Problem' }
+        '422': { $ref: '#/components/responses/Problem' }
+        '503': { $ref: '#/components/responses/Problem' }
+  /api/carts/{id}:
+    get:
+      summary: Get a cart
+      parameters: [{ $ref: '#/components/parameters/Id' }]
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Cart' } } } }
+        '404': { $ref: '#/components/responses/Problem' }
+components:
+  parameters:
+    Id: { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+  responses:
+    Problem:
+      description: RFC 9457 problem details, with a stable `code` for business errors
+      content:
+        application/problem+json:
+          schema:
+            type: object
+            properties:
+              status: { type: integer }
+              detail: { type: string }
+              code:
+                type: string
+                enum: [EMAIL_ALREADY_REGISTERED, CUSTOMER_UNKNOWN, PRODUCT_UNAVAILABLE, MIXED_CURRENCIES,
+                       QUANTITY_LIMIT_EXCEEDED, EMPTY_CART, PRODUCT_SERVICE_UNAVAILABLE]
+  schemas:
+    RegisterCustomer:
+      type: object
+      required: [email, firstName, lastName]
+      properties:
+        email: { type: string, format: email, maxLength: 255 }
+        firstName: { type: string, maxLength: 100 }
+        lastName: { type: string, maxLength: 100 }
+    Customer:
+      allOf:
+        - $ref: '#/components/schemas/RegisterCustomer'
+        - type: object
+          properties:
+            id: { type: string, format: uuid }
+            createdAt: { type: string, format: date-time }
+    Product:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        sku: { type: string }
+        name: { type: string }
+        description: { type: string }
+        price: { type: number, example: 149.90 }
+        currency: { type: string, pattern: '^[A-Z]{3}$' }
+        active: { type: boolean }
+    ProductPage:
+      type: object
+      properties:
+        content: { type: array, items: { $ref: '#/components/schemas/Product' } }
+        page: { type: integer }
+        size: { type: integer }
+        totalElements: { type: integer }
+    CreateCart:
+      type: object
+      required: [customerId, items]
+      properties:
+        customerId: { type: string, format: uuid }
+        items:
+          type: array
+          minItems: 1
+          maxItems: 50
+          items:
+            type: object
+            required: [productId, quantity]
+            properties:
+              productId: { type: string, format: uuid }
+              quantity: { type: integer, minimum: 1, maximum: 99 }
+    Cart:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        customerId: { type: string, format: uuid }
+        currency: { type: string }
+        total: { type: number }
+        createdAt: { type: string, format: date-time }
+        items:
+          type: array
+          items:
+            type: object
+            properties:
+              productId: { type: string, format: uuid }
+              productName: { type: string }
+              unitPrice: { type: number }
+              quantity: { type: integer }
+              lineTotal: { type: number }

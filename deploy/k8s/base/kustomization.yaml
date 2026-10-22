@@ -1,0 +1,16 @@
+# Base: what every environment shares. Overlays only change WHERE dependencies live,
+# HOW MANY replicas run and WHICH data is loaded, never the application itself.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - customer-service.yaml
+  - product-service.yaml
+  - cart-service.yaml
+  - frontend.yaml
+configMapGenerator:
+  - name: shop-config
+    literals:
+      - DB_HOST=postgres
+      - KAFKA_BOOTSTRAP_SERVERS=kafka:9092
+      - PRODUCT_SERVICE_URL=http://product-service:8082
+      - SHOP_TOPICS_REPLICAS=1

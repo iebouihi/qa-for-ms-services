@@ -1,0 +1,25 @@
+# Per-PR environment. CI sets the namespace and image tags, e.g.:
+#   kustomize edit set namespace pr-42
+#   kustomize edit set image ghcr.io/iebouihi/qa-for-ms-services/cart-service=...:sha-abc123
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: pr-preview
+resources:
+  - ../../base
+  - dependencies.yaml
+secretGenerator:
+  - name: shop-db
+    literals:
+      - DB_USER=shop
+      - DB_PASSWORD=preview-only
+patches:
+  - target: { kind: Deployment, name: product-service }
+    patch: |-
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value: { name: SPRING_PROFILES_ACTIVE, value: seed }
+  - target: { kind: Ingress, name: shop }
+    patch: |-
+      - op: replace
+        path: /spec/rules/0/host
+        value: pr-preview.shop.example.com
