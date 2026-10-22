@@ -14,6 +14,7 @@ import com.shop.cart.customers.KnownCustomerRepository;
 import com.shop.cart.events.CartCreatedEvent;
 import com.shop.cart.products.ProductClient;
 import com.shop.cart.products.ProductClient.ProductNotFoundException;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -27,6 +28,7 @@ public class CartService {
     private final ApplicationEventPublisher events;
     private final Clock clock;
 
+    @Autowired // two constructors: the other one injects a fixed Clock in unit tests
     public CartService(CartRepository carts, KnownCustomerRepository customers, ProductClient products,
                        ApplicationEventPublisher events) {
         this(carts, customers, products, events, Clock.systemUTC());

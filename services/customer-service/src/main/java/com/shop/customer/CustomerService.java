@@ -6,6 +6,7 @@ import java.util.UUID;
 
 import com.shop.customer.CustomerApi.RegisterCustomerRequest;
 import com.shop.customer.events.CustomerRegisteredEvent;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -17,6 +18,7 @@ public class CustomerService {
     private final ApplicationEventPublisher events;
     private final Clock clock;
 
+    @Autowired // two constructors: the other one injects a fixed Clock in unit tests
     public CustomerService(CustomerRepository repository, ApplicationEventPublisher events) {
         this(repository, events, Clock.systemUTC());
     }
