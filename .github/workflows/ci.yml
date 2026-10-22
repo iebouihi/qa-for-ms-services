@@ -36,7 +36,10 @@ jobs:
       # Reactor order: libs -> cart (writes pacts) -> customer & product (verify pacts).
       # surefire = unit + contract tests; failsafe = component tests with Testcontainers.
       - name: Build and test
-        run: mvn -B -ntp verify
+        run: mvn -B -ntp verify 2>&1 | tee maven.log; exit ${PIPESTATUS[0]}
+      - name: Explain failures
+        if: failure()
+        run: python3 .github/scripts/annotate-test-failures.py maven.log
       - name: Upload contracts (pact files)
         if: always()
         uses: actions/upload-artifact@v4
@@ -99,6 +102,9 @@ jobs:
         working-directory: e2e
       - run: npm run test:mocked
         working-directory: e2e
+      - name: Explain failures
+        if: failure()
+        run: python3 .github/scripts/annotate-test-failures.py
       - name: Upload Playwright report
         if: always()
         uses: actions/upload-artifact@v4
@@ -148,7 +154,7 @@ jobs:
           java-version: "21"
           cache: maven
       - name: API journeys (REST Assured)
-        run: mvn -B -ntp -Pjourneys -pl tests/api-tests verify -Dshop.baseUrl=http://localhost:8080
+        run: mvn -B -ntp -Pjourneys -pl tests/api-tests verify -Dshop.baseUrl=http://localhost:8080 2>&1 | tee journeys.log; exit ${PIPESTATUS[0]}
       - uses: actions/setup-node@v4
         with:
           node-version: "24"
@@ -164,7 +170,13 @@ jobs:
           npm run test:journeys
       - name: Collect service logs (search by correlation id, e.g. journey-cart-...)
         if: failure()
-        run: docker compose logs --no-color > compose-logs.txt
+        run: |
+          docker compose ps -a
+          docker compose logs --no-color > compose-logs.txt
+          grep -E " ERROR |Exception" compose-logs.txt | head -40 > compose-errors.txt || true
+      - name: Explain failures
+        if: failure()
+        run: python3 .github/scripts/annotate-test-failures.py journeys.log compose-errors.txt
       - name: Upload journey reports and logs
         if: always()
         uses: actions/upload-artifact@v4
