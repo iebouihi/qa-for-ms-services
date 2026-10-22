@@ -18,7 +18,7 @@ import java.util.UUID;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.github.tomakehurst.wiremock.junit5.WireMockExtension;
+import com.github.tomakehurst.wiremock.WireMockServer;
 import com.shop.observability.CorrelationId;
 import com.shop.testsupport.KafkaTestConsumer;
 import com.shop.testsupport.ProductionLikeContainers;
@@ -27,7 +27,6 @@ import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInstance;
-import org.junit.jupiter.api.extension.RegisterExtension;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -56,10 +55,15 @@ import org.springframework.test.context.DynamicPropertySource;
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 class CartComponentIT {
 
-    @RegisterExtension
-    static WireMockExtension productService = WireMockExtension.newInstance()
-            .options(wireMockConfig().dynamicPort())
-            .build();
+    /**
+     * Started statically, before the Spring context is built (the context needs its URL).
+     * Every test stubs its own product ids, so stubs never collide between tests.
+     */
+    static final WireMockServer productService = new WireMockServer(wireMockConfig().dynamicPort());
+
+    static {
+        productService.start();
+    }
 
     @DynamicPropertySource
     static void productServiceUrl(DynamicPropertyRegistry registry) {
@@ -91,6 +95,7 @@ class CartComponentIT {
     void close() {
         cartCreated.close();
         deadLetters.close();
+        productService.stop();
     }
 
     @Test
