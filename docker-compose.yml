@@ -105,6 +105,6 @@ services:
       product-service: { condition: service_healthy }
       cart-service: { condition: service_healthy }
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/healthz | grep -q ok"]
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8080/healthz | grep -q ok"]
       interval: 3s
       retries: 20
