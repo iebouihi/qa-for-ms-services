@@ -40,5 +40,9 @@ for log in sys.argv[1:]:
     errors = [l for l in lines if l.startswith("[ERROR]") or "Caused by:" in l]
     if errors:
         emit(f"Build errors in {log}", "\n".join(errors[:60]))
+    # Application log lines (Spring Boot format) that usually explain a failing component test.
+    app = [l for l in lines if (" ERROR " in l or " WARN " in l) and not l.startswith("[")]
+    if app:
+        emit(f"Application warnings/errors in {log}", "\n".join(l[:400] for l in app[-40:]))
 
 print(f"{emitted} annotation(s) emitted")
