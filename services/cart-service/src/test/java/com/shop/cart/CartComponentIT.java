@@ -28,7 +28,7 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInstance;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.autoconfigure.kafka.KafkaConnectionDetails;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.client.TestRestTemplate;
 import org.springframework.context.annotation.Import;
@@ -79,16 +79,21 @@ class CartComponentIT {
     JdbcTemplate jdbc;
     @Autowired
     ObjectMapper json;
-    @Value("${spring.kafka.bootstrap-servers}")
-    String bootstrapServers;
+    /** Where Testcontainers' Kafka really is (the spring.kafka.* properties are not updated). */
+    @Autowired
+    KafkaConnectionDetails kafkaConnection;
 
     KafkaTestConsumer cartCreated;
     KafkaTestConsumer deadLetters;
 
     @BeforeAll
     void subscribe() {
-        cartCreated = new KafkaTestConsumer(bootstrapServers, "cart.created");
-        deadLetters = new KafkaTestConsumer(bootstrapServers, "customer.registered.DLT");
+        cartCreated = new KafkaTestConsumer(bootstrapServers(), "cart.created");
+        deadLetters = new KafkaTestConsumer(bootstrapServers(), "customer.registered.DLT");
+    }
+
+    private String bootstrapServers() {
+        return String.join(",", kafkaConnection.getBootstrapServers());
     }
 
     @AfterAll

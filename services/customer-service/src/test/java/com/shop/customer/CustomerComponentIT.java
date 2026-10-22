@@ -17,7 +17,7 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInstance;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.autoconfigure.kafka.KafkaConnectionDetails;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.client.TestRestTemplate;
 import org.springframework.context.annotation.Import;
@@ -40,14 +40,19 @@ class CustomerComponentIT {
     TestRestTemplate http;
     @Autowired
     ObjectMapper json;
-    @Value("${spring.kafka.bootstrap-servers}")
-    String bootstrapServers;
+    /** Where Testcontainers' Kafka really is (the spring.kafka.* properties are not updated). */
+    @Autowired
+    KafkaConnectionDetails kafkaConnection;
 
     KafkaTestConsumer events;
 
     @BeforeAll
     void subscribe() {
-        events = new KafkaTestConsumer(bootstrapServers, "customer.registered");
+        events = new KafkaTestConsumer(bootstrapServers(), "customer.registered");
+    }
+
+    private String bootstrapServers() {
+        return String.join(",", kafkaConnection.getBootstrapServers());
     }
 
     @AfterAll
